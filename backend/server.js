@@ -17,6 +17,8 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const ADMIN_NAME = process.env.ADMIN_NAME || "Admin User";
 const ADMIN_ROLE = "admin";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "gemma4:e4b";
 
 let isMongoConnected = false;
 
@@ -119,6 +121,45 @@ app.get("/api/auth/me", (req, res) => {
     return res.json({ user: { email: user.email, name: user.name } });
   } catch (_error) {
     return res.status(401).json({ message: "Invalid or expired token" });
+  }
+});
+
+app.post("/api/ai/chat", async (req, res) => {
+  try {
+    const { prompt, messages } = req.body || {};
+    const chatMessages =
+      Array.isArray(messages) && messages.length > 0
+        ? messages
+        : prompt
+          ? [{ role: "user", content: prompt }]
+          : [];
+
+    if (chatMessages.length === 0) {
+      return res.status(400).json({ message: "Provide prompt or messages" });
+    }
+
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        stream: false,
+        messages: chatMessages
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({ message: "Ollama request failed", details: data });
+    }
+
+    return res.json({
+      model: OLLAMA_MODEL,
+      message: data.message?.content || "",
+      raw: data
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to connect with Ollama", details: error.message });
   }
 });
 
